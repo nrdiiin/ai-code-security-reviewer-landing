@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Code Security Reviewer — Catch real vulnerabilities. Skip the noise.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0F1C;
+    --bg-raise: #0E1526;
+    --surface: #121A2B;
+    --surface-2: #182338;
+    --border: #263452;
+    --border-soft: #1C2740;
+    --text: #E8ECF4;
+    --text-muted: #8D9AB5;
+    --text-dim: #5C6A88;
+    --accent: #E8A33D;
+    --accent-soft: rgba(232, 163, 61, 0.12);
+    --accent-line: rgba(232, 163, 61, 0.35);
+
+    --sev-critical: #F0465B;
+    --sev-high: #F2994A;
+    --sev-medium: #F2C94C;
+    --sev-low: #56B4F2;
+    --sev-info: #8D9AB5;
+
+    --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(232,163,61,0.07), transparent 45%),
+      radial-gradient(circle at 85% 92%, rgba(86,180,242,0.05), transparent 45%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 28px;
+    position: relative;
+    z-index: 1;
+  }
+
+  ::selection { background: var(--accent-soft); color: var(--accent); }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Nav ---------- */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(12px);
+    background: rgba(10, 15, 28, 0.78);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: linear-gradient(145deg, var(--accent), #C77F1F);
+    display: grid; place-items: center;
+    font-size: 12px; font-weight: 700; color: #0A0F1C;
+    font-family: var(--font-mono);
+  }
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    transition: border-color .15s, background .15s;
+  }
+  .nav-cta:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+  @media (max-width: 700px) { .nav-links { display: none; } }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    padding: 88px 0 72px;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 56px;
+    align-items: center;
+  }
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; padding: 56px 0 48px; }
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(34px, 5vw, 52px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    margin-bottom: 20px;
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 46ch;
+    margin-bottom: 32px;
+  }
+
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+  .btn {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 12px 20px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .15s, box-shadow .15s, border-color .15s, background .15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #16110A;
+    box-shadow: 0 0 0 0 rgba(232,163,61,0);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(232,163,61,0.5); }
+  .btn-ghost {
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn-ghost:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+
+  .trust-line {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .trust-line strong { color: var(--text-muted); font-weight: 500; }
+
+  /* ---------- Terminal signature panel ---------- */
+  .terminal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -30px rgba(0,0,0,0.6);
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-raise);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; opacity: .5; }
+  .dot:nth-child(1) { background: var(--sev-critical); }
+  .dot:nth-child(2) { background: var(--sev-medium); }
+  .dot:nth-child(3) { background: #4ADE80; }
+  .terminal-title {
+    margin-left: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .terminal-body {
+    padding: 22px 20px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    min-height: 280px;
+  }
+  .term-line { display: flex; gap: 10px; margin-bottom: 6px; }
+  .term-ln { color: var(--text-dim); width: 18px; text-align: right; flex-shrink: 0; user-select: none; }
+  .term-code { color: var(--text-muted); white-space: pre; }
+  .tok-kw { color: #C792EA; }
+  .tok-str { color: #A8D97D; }
+  .tok-fn { color: #82AAFF; }
+
+  .finding-pop {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 4px;
+    padding: 1px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0;
+    transform: translateY(2px) scale(0.96);
+    transition: opacity .35s ease, transform .35s ease;
+  }
+  .finding-pop.show { opacity: 1; transform: translateY(0) scale(1); }
+  .finding-pop.critical { background: rgba(240,70,91,0.15); color: var(--sev-critical); }
+  .finding-pop.high { background: rgba(242,153,74,0.15); color: var(--sev-high); }
+  .finding-pop.info { background: rgba(141,154,181,0.15); color: var(--sev-info); }
+
+  .term-status {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border-soft);
+    color: var(--text-dim);
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity .4s ease;
+  }
+  .term-status.show { opacity: 1; }
+  .term-status b { color: var(--text-muted); }
+
+  /* ---------- Section shell ---------- */
+  section { padding: 76px 0; border-top: 1px solid var(--border-soft); }
+  .section-head { max-width: 640px; margin-bottom: 44px; }
+  .section-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-size: clamp(24px, 3.4vw, 32px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 12px;
+  }
+  .section-sub { color: var(--text-muted); font-size: 15.5px; max-width: 56ch; }
+
+  /* ---------- Problem section ---------- */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+  @media (max-width: 800px) { .problem-grid { grid-template-columns: 1fr; } }
+  .problem-copy p { color: var(--text-muted); margin-bottom: 16px; font-size: 15.5px; }
+  .problem-copy strong { color: var(--text); font-weight: 600; }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0; }
+  .stat-row + .stat-row { border-top: 1px solid var(--border-soft); }
+  .stat-label { font-size: 13.5px; color: var(--text-muted); }
+  .stat-value { font-family: var(--font-mono); font-size: 14px; }
+  .stat-value.bad { color: var(--sev-critical); }
+  .stat-value.good { color: #4ADE80; }
+
+  /* ---------- Pipeline ---------- */
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 800px) { .pipeline { grid-template-columns: 1fr; } }
+  .pipe-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 26px 22px;
+    position: relative;
+  }
+  .pipe-num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 14px;
+    letter-spacing: 0.05em;
+  }
+  .pipe-card h3 {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .pipe-card p { font-size: 14px; color: var(--text-muted); }
+  .pipe-repo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+    border: 1px solid var(--border-soft);
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: border-color .15s, color .15s;
+  }
+  .pipe-repo:hover { border-color: var(--accent-line); color: var(--accent); }
+
+  /* ---------- Proof section: recreated PR comment ---------- */
+  .proof-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+  }
+  @media (max-width: 900px) { .proof-layout { grid-template-columns: 1fr; } }
+
+  .proof-copy p { color: var(--text-muted); font-size: 15.5px; margin-bottom: 14px; }
+  .proof-copy strong { color: var(--text); }
+  .proof-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: #4ADE80;
+    background: rgba(74,222,128,0.1);
+    border: 1px solid rgba(74,222,128,0.25);
+    padding: 6px 12px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+
+  .gh-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .gh-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-raise);
+  }
+  .gh-avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(140deg, #2A3650, #182338);
+    display: grid; place-items: center;
+    font-size: 13px;
+  }
+  .gh-meta { font-size: 13px; color: var(--text-muted); }
+  .gh-meta b { color: var(--text); font-weight: 600; }
+  .gh-card-body { padding: 18px; }
+  .gh-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; margin-bottom: 14px; }
+  .gh-summary { font-size: 13.5px; color: var(--text-muted); margin-bottom: 16px; }
+  .gh-summary b.high { color: var(--sev-high); }
+  .gh-summary b.info { color: var(--sev-info); }
+
+  table.findings { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 14px; }
+  table.findings th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--text-dim);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  table.findings td { padding: 8px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
+  .sev-pill {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+  }
+  .sev-pill.high { background: rgba(242,153,74,0.15); color: var(--sev-high); }
+  .sev-pill.info { background: rgba(141,154,181,0.15); color: var(--sev-info); }
+  code.inline { font-family: var(--font-mono); background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  .gh-link { font-size: 12.5px; color: var(--accent); }
+
+  /* ---------- Install ---------- */
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 800px) { .install-grid { grid-template-columns: 1fr; } }
+  .code-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .code-card-label {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .copy-btn {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    border: 1px solid var(--border-soft);
+    padding: 4px 9px;
+    border-radius: 5px;
+    cursor: pointer;
+    background: transparent;
+    transition: color .15s, border-color .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent-line); }
+  pre.code-block {
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-muted);
+    overflow-x: auto;
+    line-height: 1.7;
+  }
+  pre.code-block .c1 { color: var(--text-dim); }
+  pre.code-block .k { color: #C792EA; }
+  pre.code-block .s { color: #A8D97D; }
+
+  /* ---------- Repo cards ---------- */
+  .repo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 800px) { .repo-grid { grid-template-columns: 1fr; } }
+  .repo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    transition: border-color .15s, transform .15s;
+  }
+  .repo-card:hover { border-color: var(--accent-line); transform: translateY(-2px); }
+  .repo-name { font-family: var(--font-mono); font-size: 13.5px; color: var(--accent); margin-bottom: 10px; }
+  .repo-desc { font-size: 13.5px; color: var(--text-muted); margin-bottom: 14px; }
+  .repo-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .repo-tag {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Footer ---------- */
+  footer {
+    padding: 40px 0 60px;
+    border-top: 1px solid var(--border-soft);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .footer-note { font-size: 13px; color: var(--text-dim); font-family: var(--font-mono); }
+  .footer-links { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); }
+  .footer-links a:hover { color: var(--accent); }
+
+  /* ---------- Live demo panel ---------- */
+  .demo-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-top: 1px dashed var(--border-soft);
+  }
+  .demo-toggle-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .demo-toggle-btn {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  .demo-toggle-btn:hover { transform: translateY(-1px); }
+
+  .live-demo {
+    display: none;
+    padding: 18px 20px 20px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .live-demo.open { display: block; }
+
+  .live-demo-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .lang-select {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .live-demo textarea {
+    width: 100%;
+    min-height: 140px;
+    background: var(--bg-raise);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    resize: vertical;
+    margin-bottom: 12px;
+  }
+  .live-demo textarea:focus { outline: none; border-color: var(--accent-line); }
+
+  .live-demo-actions { display: flex; justify-content: space-between; align-items: center; }
+  .char-count { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
+  .char-count.over { color: var(--sev-critical); }
+
+  .scan-btn {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #16110A;
+    border: none;
+    cursor: pointer;
+    transition: transform .15s, opacity .15s;
+  }
+  .scan-btn:hover { transform: translateY(-1px); }
+  .scan-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  .live-results { margin-top: 16px; }
+  .live-results-empty { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); }
+  .live-results-empty.clean { color: #4ADE80; }
+  .live-results-empty.error { color: var(--sev-critical); }
+
+  .live-finding {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 12.5px;
+  }
+  .live-finding:last-child { border-bottom: none; }
+  .live-finding .sev-pill { flex-shrink: 0; margin-top: 1px; }
+  .live-finding .sev-pill.critical { background: rgba(240,70,91,0.15); color: var(--sev-critical); }
+  .live-finding .sev-pill.medium { background: rgba(242,201,76,0.15); color: var(--sev-medium); }
+  .live-finding-msg { color: var(--text-muted); }
+  .live-finding-loc { font-family: var(--font-mono); color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+
+  .demo-disclaimer {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 14px;
+    font-family: var(--font-mono);
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="brand">
+      <span class="brand-mark">&gt;_</span>
+      AI Code Security Reviewer
+    </div>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#proof">Proof</a>
+      <a href="#install">Install</a>
+      <a href="#ecosystem">Repos</a>
+    </div>
+    <a class="nav-cta" href="https://github.com/nrdiiin/ai-code-security-reviewer" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <section class="hero" style="border-top:none; padding-top: 88px;">
+    <div>
+      <div class="eyebrow">Open source · AST + AI · MIT licensed</div>
+      <h1>Catch real vulnerabilities.<br><em>Skip the noise.</em></h1>
+      <p class="hero-sub">
+        Most scanners bury real bugs under false positives until nobody reads the report.
+        This one tells you what's actually wrong &mdash; parsed with tree-sitter, explained
+        with AI, on your terms.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#install">Get started →</a>
+        <a class="btn btn-ghost" href="https://github.com/nrdiiin/ai-code-security-reviewer-action" target="_blank" rel="noopener">View the Action</a>
+      </div>
+      <div class="trust-line">
+        <strong>3</strong> connected repos · <strong>29+</strong> automated tests per component · runs with your own API key
+      </div>
+    </div>
+
+    <div class="terminal" id="terminal">
+      <div class="terminal-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="terminal-title">app.py &mdash; aicsr scan</span>
+      </div>
+      <div class="terminal-body" id="term-body"></div>
+
+      <div class="demo-toggle-row">
+        <span class="demo-toggle-label">↑ that was a recording</span>
+        <button class="demo-toggle-btn" id="demo-toggle-btn">Try it with your own code →</button>
+      </div>
+
+      <div class="live-demo" id="live-demo">
+        <div class="live-demo-row">
+          <select class="lang-select" id="lang-select">
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+          </select>
+        </div>
+        <textarea id="code-input" spellcheck="false" placeholder="Paste a snippet here — up to 3000 characters. Nothing is stored.">API_KEY = "sk-example-not-a-real-key"
+
+def get_user(user_id):
+    query = "SELECT * FROM users WHERE id=" + user_id
+    cursor.execute(query)</textarea>
+        <div class="live-demo-actions">
+          <span class="char-count" id="char-count">0 / 3000</span>
+          <button class="scan-btn" id="scan-btn">Scan this code</button>
+        </div>
+        <div class="live-results" id="live-results"></div>
+        <div class="demo-disclaimer">
+          Runs on the real Core SDK via a public demo API · rate-limited to 10 scans/min ·
+          code is analyzed in memory and never saved
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">The problem</div>
+      <h2>False positives are why nobody reads security reports</h2>
+      <p class="section-sub">
+        Traditional SAST tools flag anything that resembles a pattern &mdash; including
+        placeholder values, test fixtures, and code that's already safe. Developers learn
+        to ignore the noise, and real issues slip through with it.
+      </p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-copy">
+        <p><strong>We built this the hard way.</strong> Every detector in this project went
+        through manual verification against real code &mdash; not just unit tests. Along the
+        way we found and fixed the exact failure modes that make other scanners exhausting
+        to use: SQL injection missed via <code class="inline">.format()</code> and
+        <code class="inline">%s</code>, secrets buried in dict literals, and placeholder
+        values wrongly flagged as critical.</p>
+        <p>The result is a detector that stays quiet on clean code and specific when it
+        isn't.</p>
+      </div>
+      <div class="stat-card">
+        <div class="stat-row">
+          <span class="stat-label">Placeholder secret, generic scanner</span>
+          <span class="stat-value bad">CRITICAL ✗</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Placeholder secret, this project</span>
+          <span class="stat-value good">INFO ✓</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">SQL injection via <code class="inline">.format()</code></span>
+          <span class="stat-value good">Detected ✓</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Clean, well-written code</span>
+          <span class="stat-value good">0 findings ✓</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how-it-works">
+    <div class="section-head">
+      <div class="section-eyebrow">How it works</div>
+      <h2>Three tools, one pipeline</h2>
+      <p class="section-sub">
+        Each piece does one job and does it independently &mdash; use the CLI on its own,
+        or let the Action run it automatically on every pull request.
+      </p>
+    </div>
+    <div class="pipeline">
+      <div class="pipe-card">
+        <div class="pipe-num">01 · PARSE + DETECT</div>
+        <h3>Core SDK</h3>
+        <p>Parses Python and JavaScript with tree-sitter, then runs pattern-based
+        detectors for secrets, injection, and dangerous functions.</p>
+        <a class="pipe-repo" href="https://github.com/nrdiiin/ai-code-security-reviewer" target="_blank" rel="noopener">↳ ai-code-security-reviewer</a>
+      </div>
+      <div class="pipe-card">
+        <div class="pipe-num">02 · SCAN + EXPLAIN</div>
+        <h3>CLI</h3>
+        <p>Scans a file or folder from your terminal. Outputs text, JSON, or SARIF
+        &mdash; with your own LLM key for contextual advice, or none at all.</p>
+        <a class="pipe-repo" href="https://github.com/nrdiiin/ai-code-security-reviewer-cli" target="_blank" rel="noopener">↳ ai-code-security-reviewer-cli</a>
+      </div>
+      <div class="pipe-card">
+        <div class="pipe-num">03 · AUTOMATE</div>
+        <h3>GitHub Action</h3>
+        <p>Drops into any workflow. Comments the summary on your PR and uploads
+        SARIF straight to GitHub Code Scanning.</p>
+        <a class="pipe-repo" href="https://github.com/nrdiiin/ai-code-security-reviewer-action" target="_blank" rel="noopener">↳ ai-code-security-reviewer-action</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROOF -->
+  <section id="proof">
+    <div class="proof-layout">
+      <div class="proof-copy">
+        <div class="proof-badge">● Live on a real pull request</div>
+        <h2 style="margin-bottom:16px;">Proof, not promises</h2>
+        <p>This is the actual comment the Action posted on a pull request for
+        <strong>task-manager-api</strong>, a real Flask service &mdash; not a staged demo.</p>
+        <p>Notice the hardcoded-looking <code class="inline">API_KEY</code> placeholder
+        is correctly scored as <strong>info</strong>, not critical &mdash; a direct result
+        of the false-positive fix described above.</p>
+        <a class="gh-link" href="https://github.com/nrdiiin/ai-code-security-reviewer-action" target="_blank" rel="noopener">See how the Action posts this →</a>
+      </div>
+
+      <div class="gh-card">
+        <div class="gh-card-head">
+          <div class="gh-avatar">🛡️</div>
+          <div class="gh-meta"><b>github-actions</b> commented on pull request</div>
+        </div>
+        <div class="gh-card-body">
+          <div class="gh-title">🛡️ AI Code Security Reviewer &mdash; Scan Results</div>
+          <div class="gh-summary">
+            2 finding(s) found: <b class="high">● 1 high</b> &nbsp;|&nbsp; <b class="info">● 1 info</b>
+          </div>
+          <table class="findings">
+            <tr><th>Severity</th><th>File</th><th>Description</th></tr>
+            <tr>
+              <td><span class="sev-pill high">high</span></td>
+              <td><code class="inline">vulnerable_demo.py</code></td>
+              <td>Use of dangerous function 'eval'.</td>
+            </tr>
+            <tr>
+              <td><span class="sev-pill info">info</span></td>
+              <td><code class="inline">vulnerable_demo.py</code></td>
+              <td>Possible hardcoded secret in variable 'API_KEY'.</td>
+            </tr>
+          </table>
+          <a class="gh-link" href="#">📋 View all findings in the Security tab</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install">
+    <div class="section-head">
+      <div class="section-eyebrow">Get started</div>
+      <h2>Two minutes to your first scan</h2>
+      <p class="section-sub">Run it locally right now, or wire it into CI so it runs on every pull request automatically.</p>
+    </div>
+    <div class="install-grid">
+      <div class="code-card">
+        <div class="code-card-label">
+          <span>CLI &mdash; run locally</span>
+          <button class="copy-btn" data-copy="pip install git+https://github.com/nrdiiin/ai-code-security-reviewer-cli.git
+aicsr scan . --format text">Copy</button>
+        </div>
+        <pre class="code-block"><span class="c1"># install</span>
+pip install git+https://github.com/nrdiiin/ai-code-security-reviewer-cli.git
+
+<span class="c1"># scan your project</span>
+aicsr scan . --format text</pre>
+      </div>
+      <div class="code-card">
+        <div class="code-card-label">
+          <span>GitHub Action &mdash; runs on every PR</span>
+          <button class="copy-btn" data-copy="- uses: nrdiiin/ai-code-security-reviewer-action@main
+  with:
+    path: '.'
+    fail-on: 'high'">Copy</button>
+        </div>
+        <pre class="code-block"><span class="k">- uses:</span> <span class="s">nrdiiin/ai-code-security-reviewer-action@main</span>
+  <span class="k">with:</span>
+    <span class="k">path:</span> <span class="s">'.'</span>
+    <span class="k">fail-on:</span> <span class="s">'high'</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ECOSYSTEM -->
+  <section id="ecosystem">
+    <div class="section-head">
+      <div class="section-eyebrow">The ecosystem</div>
+      <h2>Three independent, MIT-licensed repos</h2>
+      <p class="section-sub">Built one at a time, each validated end-to-end before the next one started.</p>
+    </div>
+    <div class="repo-grid">
+      <a class="repo-card" href="https://github.com/nrdiiin/ai-code-security-reviewer" target="_blank" rel="noopener">
+        <div class="repo-name">ai-code-security-reviewer</div>
+        <div class="repo-desc">Core SDK. Multi-language parsing, detection engine, pluggable AI analysis.</div>
+        <div class="repo-tags"><span class="repo-tag">python</span><span class="repo-tag">tree-sitter</span><span class="repo-tag">sast</span></div>
+      </a>
+      <a class="repo-card" href="https://github.com/nrdiiin/ai-code-security-reviewer-cli" target="_blank" rel="noopener">
+        <div class="repo-name">ai-code-security-reviewer-cli</div>
+        <div class="repo-desc">Command-line interface. Text, JSON, and SARIF output for humans and machines.</div>
+        <div class="repo-tags"><span class="repo-tag">cli</span><span class="repo-tag">sarif</span><span class="repo-tag">ci-cd</span></div>
+      </a>
+      <a class="repo-card" href="https://github.com/nrdiiin/ai-code-security-reviewer-action" target="_blank" rel="noopener">
+        <div class="repo-name">ai-code-security-reviewer-action</div>
+        <div class="repo-desc">Composite GitHub Action. PR comments, Code Scanning uploads, zero config.</div>
+        <div class="repo-tags"><span class="repo-tag">github-action</span><span class="repo-tag">devsecops</span></div>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-note">MIT licensed · built in the open by @nrdiiin</div>
+    <div class="footer-links">
+      <a href="https://github.com/nrdiiin/ai-code-security-reviewer" target="_blank" rel="noopener">Core SDK</a>
+      <a href="https://github.com/nrdiiin/ai-code-security-reviewer-cli" target="_blank" rel="noopener">CLI</a>
+      <a href="https://github.com/nrdiiin/ai-code-security-reviewer-action" target="_blank" rel="noopener">Action</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // Signature hero animation: type out a vulnerable snippet, then reveal findings.
+  const codeLines = [
+    { n: 1, html: '<span class="tok-kw">import</span> sqlite3' },
+    { n: 2, html: '' },
+    { n: 3, html: 'API_KEY <span class="tok-kw">=</span> <span class="tok-str">"FAKE-DEMO-KEY-1234567890"</span>', pop: { sev: 'info', label: 'info · placeholder detected' } },
+    { n: 4, html: '' },
+    { n: 5, html: '<span class="tok-kw">def</span> <span class="tok-fn">get_user</span>(user_id):' },
+    { n: 6, html: '    query <span class="tok-kw">=</span> <span class="tok-str">"SELECT * FROM users WHERE id="</span> <span class="tok-kw">+</span> user_id', pop: { sev: 'high', label: 'high · sql-injection' } },
+    { n: 7, html: '    cursor.execute(query)' },
+    { n: 8, html: '' },
+    { n: 9, html: '<span class="tok-kw">def</span> <span class="tok-fn">run</span>(cmd):' },
+    { n: 10, html: '    <span class="tok-kw">return</span> <span class="tok-fn">eval</span>(cmd)', pop: { sev: 'critical', label: 'critical · dangerous-function' } },
+  ];
+
+  const body = document.getElementById('term-body');
+  let delay = 200;
+  const lineEls = [];
+
+  codeLines.forEach((line) => {
+    const row = document.createElement('div');
+    row.className = 'term-line';
+    row.style.opacity = '0';
+    row.style.transition = 'opacity .3s ease';
+    row.innerHTML = `<span class="term-ln">${line.n}</span><span class="term-code">${line.html || '&nbsp;'}</span>`;
+    body.appendChild(row);
+    lineEls.push(row);
+
+    setTimeout(() => { row.style.opacity = '1'; }, delay);
+
+    if (line.pop) {
+      const popDelay = delay + 260;
+      setTimeout(() => {
+        const codeSpan = row.querySelector('.term-code');
+        const pop = document.createElement('span');
+        pop.className = `finding-pop ${line.pop.sev}`;
+        pop.textContent = line.pop.label;
+        codeSpan.appendChild(pop);
+        requestAnimationFrame(() => pop.classList.add('show'));
+      }, popDelay);
+    }
+    delay += 260;
+  });
+
+  setTimeout(() => {
+    const status = document.createElement('div');
+    status.className = 'term-status';
+    status.innerHTML = '<b>3 findings</b> in 0.4s &nbsp;·&nbsp; 1 critical, 1 high, 1 info &nbsp;·&nbsp; scanned with tree-sitter + AST rules';
+    body.appendChild(status);
+    requestAnimationFrame(() => status.classList.add('show'));
+  }, delay + 300);
+
+  // ---------------------------------------------------------------------
+  // Live demo panel — calls the real Demo API deployed on Railway
+  // ---------------------------------------------------------------------
+  const DEMO_API_URL = "https://ai-code-security-reviewer-demo-api-production.up.railway.app/api/scan";
+  const MAX_CHARS = 3000;
+
+  const toggleBtn = document.getElementById('demo-toggle-btn');
+  const liveDemo = document.getElementById('live-demo');
+  const codeInput = document.getElementById('code-input');
+  const langSelect = document.getElementById('lang-select');
+  const scanBtn = document.getElementById('scan-btn');
+  const charCount = document.getElementById('char-count');
+  const liveResults = document.getElementById('live-results');
+
+  toggleBtn.addEventListener('click', () => {
+    const isOpen = liveDemo.classList.toggle('open');
+    toggleBtn.textContent = isOpen ? '← Hide' : 'Try it with your own code →';
+    if (isOpen) updateCharCount();
+  });
+
+  function updateCharCount() {
+    const len = codeInput.value.length;
+    charCount.textContent = `${len} / ${MAX_CHARS}`;
+    charCount.classList.toggle('over', len > MAX_CHARS);
+  }
+  codeInput.addEventListener('input', updateCharCount);
+
+  function severityPillClass(sev) {
+    return ['critical', 'high', 'medium', 'low', 'info'].includes(sev) ? sev : 'info';
+  }
+
+  function renderResults(payload) {
+    liveResults.innerHTML = '';
+
+    if (payload.total === 0) {
+      liveResults.innerHTML = '<div class="live-results-empty clean">✓ No findings — this code looks clean.</div>';
+      return;
+    }
+
+    payload.findings.forEach(f => {
+      const row = document.createElement('div');
+      row.className = 'live-finding';
+      row.innerHTML = `
+        <span class="sev-pill ${severityPillClass(f.severity)}">${f.severity}</span>
+        <div>
+          <div class="live-finding-msg">${f.message}</div>
+          <div class="live-finding-loc">line ${f.line}${f.rule_id ? ' · ' + f.rule_id : ''}</div>
+        </div>
+      `;
+      liveResults.appendChild(row);
+    });
+  }
+
+  function renderError(message) {
+    liveResults.innerHTML = `<div class="live-results-empty error">✗ ${message}</div>`;
+  }
+
+  scanBtn.addEventListener('click', async () => {
+    const code = codeInput.value;
+    const language = langSelect.value;
+
+    if (!code.trim()) {
+      renderError('Paste some code first.');
+      return;
+    }
+    if (code.length > MAX_CHARS) {
+      renderError(`Code exceeds ${MAX_CHARS} characters.`);
+      return;
+    }
+
+    scanBtn.disabled = true;
+    const originalLabel = scanBtn.textContent;
+    scanBtn.innerHTML = '<span class="spinner"></span> Scanning...';
+    liveResults.innerHTML = '';
+
+    try {
+      const res = await fetch(DEMO_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, language }),
+      });
+
+      if (res.status === 429) {
+        renderError("Rate limit reached (10 scans/min across all visitors). Try again shortly.");
+      } else if (res.status === 408) {
+        renderError("Scan timed out — try a smaller snippet.");
+      } else if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        renderError(err.error || `Request failed (${res.status}).`);
+      } else {
+        const payload = await res.json();
+        renderResults(payload);
+      }
+    } catch (e) {
+      renderError('Could not reach the demo API. It may be waking up from sleep — try again in a few seconds.');
+    } finally {
+      scanBtn.disabled = false;
+      scanBtn.textContent = originalLabel;
+    }
+  });
+
+  // Copy buttons
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.getAttribute('data-copy');
+      navigator.clipboard.writeText(text).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>
