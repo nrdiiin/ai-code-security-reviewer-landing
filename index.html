@@ -712,6 +712,11 @@ def get_user(user_id):
           <button class="scan-btn" id="scan-btn">Scan this code</button>
         </div>
         <div class="live-results" id="live-results"></div>
+        <div class="demo-disclaimer" style="color: var(--text-muted); margin-top: 10px;">
+          💡 Tip: SQL injection is detected when the query is built inline inside
+          execute() — e.g. cursor.execute("..." + var). Queries assembled on a
+          separate line first are a known limitation (see README).
+        </div>
         <div class="demo-disclaimer">
           Runs on the real Core SDK via a public demo API · rate-limited to 10 scans/min ·
           code is analyzed in memory and never saved
